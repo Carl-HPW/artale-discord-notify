@@ -259,7 +259,7 @@ def send_discord(item: dict[str, str]) -> None:
 
     payload = {
         "username": "Artale 公告通知",
-        "content": "📢 **Artale 官方新公告**",
+        "content": "@everyone\n📢 **Artale 官方新公告**",
         "embeds": [
             {
                 "title": item["title"][:256],
@@ -268,7 +268,7 @@ def send_discord(item: dict[str, str]) -> None:
                 "color": 0xE67E22,
             }
         ],
-        "allowed_mentions": {"parse": []},
+        "allowed_mentions": {"parse": ["everyone"]},
     }
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
