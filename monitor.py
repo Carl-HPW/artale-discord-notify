@@ -7,6 +7,7 @@ import json
 import os
 import re
 import time
+from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ from urllib.request import Request, urlopen
 
 NEWS_URL = "https://artale.live/tw/news"
 STATE_FILE = Path(__file__).with_name("seen.json")
+START_DATE = date(2026, 9, 15)
 ARTICLE_PATH_RE = re.compile(r"^/tw/news/([A-Za-z0-9_-]+)$")
 DATE_RE = re.compile(r"\b20\d{2}\.\d{2}\.\d{2}(?:\s+\d{2}:\d{2})?\b")
 MAX_SEEN = 500
@@ -188,6 +190,40 @@ def enrich_news_detail(item: dict[str, str]) -> dict[str, str]:
     return item
 
 
+def parse_published_date(value: str) -> date | None:
+    match = DATE_RE.search(value)
+    if not match:
+        return None
+    try:
+        year, month, day = match.group(0)[:10].split(".")
+        return date(int(year), int(month), int(day))
+    except ValueError:
+        return None
+
+
+def filter_from_start_date(news: list[dict[str, str]]) -> list[dict[str, str]]:
+    eligible: list[dict[str, str]] = []
+    for original_item in news:
+        item = original_item
+        published_date = parse_published_date(item.get("published", ""))
+        if published_date is None:
+            try:
+                item = enrich_news_detail(item.copy())
+            except Exception as error:
+                raise RuntimeError(
+                    f"無法確認公告日期：{item['url']} - {error}"
+                ) from error
+            published_date = parse_published_date(item.get("published", ""))
+
+        if published_date is None:
+            raise RuntimeError(f"公告沒有可辨識的發布日期：{item['url']}")
+
+        if published_date >= START_DATE:
+            eligible.append(item)
+
+    return eligible
+
+
 def load_seen() -> list[str]:
     if not STATE_FILE.exists():
         return []
@@ -265,24 +301,22 @@ def main() -> None:
     if not news:
         raise RuntimeError("沒有找到任何 Artale 公告，為避免遺失狀態已停止執行。")
 
+    eligible_news = filter_from_start_date(news)
     old_seen = load_seen()
-    current_ids = [item["id"] for item in news]
-
-    if not old_seen:
-        save_seen(current_ids)
-        print(f"首次初始化完成，共記錄 {len(current_ids)} 筆既有公告，不發送通知。")
-        return
-
     seen_set = set(old_seen)
-    new_items = [item for item in news if item["id"] not in seen_set]
+    new_items = [item for item in eligible_news if item["id"] not in seen_set]
+
     if not new_items:
-        print(f"目前沒有新公告；首頁共 {len(news)} 筆。")
+        print(
+            f"目前沒有新公告；監控範圍為 {START_DATE.isoformat()}（含）以後，"
+            f"目前符合條件 {len(eligible_news)} 筆。"
+        )
         return
 
-    detailed_items = []
+    detailed_items: list[dict[str, str]] = []
     for item in new_items:
         try:
-            detailed_items.append(enrich_news_detail(item))
+            detailed_items.append(enrich_news_detail(item.copy()))
         except Exception as error:
             print(f"讀取詳細資料失敗，改用列表資料：{item['url']} - {error}")
             detailed_items.append(item)
