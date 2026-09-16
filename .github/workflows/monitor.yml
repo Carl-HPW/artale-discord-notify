@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "執行模式"
+        required: true
+        default: "normal"
+        type: choice
+        options:
+          - normal
+          - test-discord
 
 permissions:
   contents: write
@@ -21,13 +30,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Test Discord webhook
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'test-discord' }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from urllib.request import Request, urlopen
+
+          webhook_url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+          if not webhook_url:
+              raise RuntimeError("找不到 GitHub Secret：DISCORD_WEBHOOK_URL")
+
+          payload = {
+              "username": "Artale 公告通知",
+              "content": "@everyone\n🧪 **Artale 公告通知測試**\nDiscord Webhook 與 @everyone 通知功能正常。",
+              "allowed_mentions": {"parse": ["everyone"]},
+          }
+          data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+          request = Request(
+              webhook_url,
+              data=data,
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "Artale-News-Monitor/1.0",
+              },
+              method="POST",
+          )
+          with urlopen(request, timeout=30) as response:
+              response.read()
+          print("Discord 測試通知已送出。")
+          PY
+
       - name: Check Artale news
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'test-discord' }}
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python3 monitor.py
 
       - name: Save notification state
-        if: always()
+        if: ${{ always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.mode != 'test-discord') }}
         shell: bash
         run: |
           if [[ -n "$(git status --porcelain -- seen.json)" ]]; then
