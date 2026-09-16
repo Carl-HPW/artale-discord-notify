@@ -46,8 +46,8 @@ jobs:
 
           payload = {
               "username": "Artale 公告通知",
-              "content": "@everyone\n🧪 **Artale 公告通知測試**\nDiscord Webhook 與 @everyone 通知功能正常。",
-              "allowed_mentions": {"parse": ["everyone"]},
+              "content": "🧪 **Artale 公告通知測試**\nDiscord Webhook 功能正常。",
+              "allowed_mentions": {"parse": []},
           }
           data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
           request = Request(
