@@ -22,6 +22,13 @@ START_DATE = date(2026, 9, 15)
 ARTICLE_PATH_RE = re.compile(r"^/tw/news/([A-Za-z0-9_-]+)$")
 DATE_RE = re.compile(r"\b20\d{2}\.\d{2}\.\d{2}(?:\s+\d{2}:\d{2})?\b")
 MAX_SEEN = 500
+EXCLUDED_TITLE_KEYWORDS = ("Artale Tespia",)
+
+
+def is_excluded_announcement(item: dict[str, str]) -> bool:
+    """Match excluded phrases in titles, ignoring case and repeated whitespace."""
+    title = re.sub(r"\s+", " ", item.get("title", "")).casefold()
+    return any(keyword.casefold() in title for keyword in EXCLUDED_TITLE_KEYWORDS)
 
 
 def http_get(url: str, attempts: int = 3) -> str:
@@ -314,7 +321,12 @@ def main() -> None:
         return
 
     detailed_items: list[dict[str, str]] = []
+    skipped_ids: list[str] = []
     for item in new_items:
+        if is_excluded_announcement(item):
+            skipped_ids.append(item["id"])
+            print(f"已略過（標題含排除關鍵字）：{item['title']}")
+            continue
         try:
             detailed_items.append(enrich_news_detail(item.copy()))
         except Exception as error:
@@ -326,6 +338,11 @@ def main() -> None:
     failures: list[str] = []
 
     for item in detailed_items:
+        # Recheck after enrichment in case the detail-page title differs.
+        if is_excluded_announcement(item):
+            skipped_ids.append(item["id"])
+            print(f"已略過（標題含排除關鍵字）：{item['title']}")
+            continue
         try:
             send_discord(item)
             successful_ids.append(item["id"])
@@ -334,8 +351,8 @@ def main() -> None:
             failures.append(item["id"])
             print(f"通知失敗：{item['url']} - {error}")
 
-    if successful_ids:
-        save_seen(successful_ids + old_seen)
+    if successful_ids or skipped_ids:
+        save_seen(successful_ids + skipped_ids + old_seen)
 
     if failures:
         raise RuntimeError(f"有 {len(failures)} 筆公告通知失敗，稍後會自動重試。")
