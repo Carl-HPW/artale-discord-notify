@@ -23,10 +23,13 @@ ARTICLE_PATH_RE = re.compile(r"^/tw/news/([A-Za-z0-9_-]+)$")
 DATE_RE = re.compile(r"\b20\d{2}\.\d{2}\.\d{2}(?:\s+\d{2}:\d{2})?\b")
 MAX_SEEN = 500
 EXCLUDED_TITLE_KEYWORDS = ("Artale Tespia",)
+EXCLUDED_CATEGORIES = {"制裁"}
 
 
 def is_excluded_announcement(item: dict[str, str]) -> bool:
-    """Match excluded phrases in titles, ignoring case and repeated whitespace."""
+    """Exclude matching categories or title phrases."""
+    if item.get("category", "").strip() in EXCLUDED_CATEGORIES:
+        return True
     title = re.sub(r"\s+", " ", item.get("title", "")).casefold()
     return any(keyword.casefold() in title for keyword in EXCLUDED_TITLE_KEYWORDS)
 
@@ -325,7 +328,7 @@ def main() -> None:
     for item in new_items:
         if is_excluded_announcement(item):
             skipped_ids.append(item["id"])
-            print(f"已略過（標題含排除關鍵字）：{item['title']}")
+            print(f"已略過（分類或標題符合排除規則）：{item['title']}")
             continue
         try:
             detailed_items.append(enrich_news_detail(item.copy()))
@@ -341,7 +344,7 @@ def main() -> None:
         # Recheck after enrichment in case the detail-page title differs.
         if is_excluded_announcement(item):
             skipped_ids.append(item["id"])
-            print(f"已略過（標題含排除關鍵字）：{item['title']}")
+            print(f"已略過（分類或標題符合排除規則）：{item['title']}")
             continue
         try:
             send_discord(item)
