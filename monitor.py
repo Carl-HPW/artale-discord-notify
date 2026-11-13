@@ -22,7 +22,7 @@ START_DATE = date(2026, 9, 15)
 ARTICLE_PATH_RE = re.compile(r"^/tw/news/([A-Za-z0-9_-]+)$")
 DATE_RE = re.compile(r"\b20\d{2}\.\d{2}\.\d{2}(?:\s+\d{2}:\d{2})?\b")
 MAX_SEEN = 500
-EXCLUDED_TITLE_KEYWORDS = ("Artale Tespia",)
+EXCLUDED_TITLE_KEYWORDS = ("Tespia",)
 EXCLUDED_CATEGORIES = {"制裁"}
 
 
